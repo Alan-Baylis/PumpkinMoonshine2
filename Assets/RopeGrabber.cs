@@ -144,7 +144,7 @@ public class RopeGrabber : MonoBehaviour
 
             var newResultList = new List<RaycastHit2D>(newResults);
             var candidate = newResultList.Where(x => x.transform != null && x.transform.GetComponent<RopeBehavior2>() != null && x.transform.GetComponent<RopeBehavior2>().GetInstanceID() != AttachedRopePart.GetInstanceID()).FirstOrDefault();
-            if (candidate.transform.GetComponent<Collider2D>() != null)
+            if (candidate.transform != null && candidate.transform.GetComponent<Collider2D>() != null)
             {
                 var previousAttachedRopePart = AttachedRopePart;
                 Release();

@@ -84,6 +84,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Assets\AnchorDeployer.cs" />
     <Compile Include="Assets\CameraSteady.cs" />
     <Compile Include="Assets\CaveGeneration\MapGenerator.cs" />
     <Compile Include="Assets\CaveGeneration\MeshGenerator.cs" />
