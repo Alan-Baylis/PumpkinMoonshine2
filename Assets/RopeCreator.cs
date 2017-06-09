@@ -8,29 +8,25 @@ public class RopeCreator : MonoBehaviour {
     public Transform RopePart;
     public float RopePartDistance;
     public int NumberOfRopeParts;
+    public RopeGrabber holderGrabber;
     public List<Transform> ropes;
     void Start()
     {
-        ropes = new List<Transform>();
-        for(var i = 0; i < NumberOfRopeParts; i++)
+        /*var grabbed = false;
+        while (!grabbed)
         {
-            addRopePart();
-        }
+            addRopeTowardsHolder();
+            grabbed =
+                ((Vector2)(ropes.Last().position - holderGrabber.transform.position)).magnitude <= RopePartDistance;
+        }*/
     }
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Q))
-        {
-            var goalCount = Mathf.Ceil((float)NumberOfRopeParts / 2f);
-            while(ropes.Count() > goalCount)
-                ropes.RemoveAt(ropes.Count() - 1);
-            for(var i = 0; i<NumberOfRopeParts;i++)
-                addRopePart();
-        }
+        
     }
 
-    private void addRopePart()
+    private void addHangingRopePart()
     {
         
         var ropeTransform = Instantiate(RopePart) as Transform;
@@ -57,5 +53,43 @@ public class RopeCreator : MonoBehaviour {
 
         ropes.Add(ropeTransform);
         
+    }
+
+    private bool addRopeTowardsHolder()
+    {
+        var ropeTransform = Instantiate(RopePart) as Transform;
+        Vector2 ropePartGoalPos;
+        Transform lastRope;
+        if (ropes.Count() == 0)
+            lastRope = transform;
+        else
+            lastRope = ropes.Last();
+
+        var directionFromLastRope = (Vector2)(holderGrabber.transform.position - lastRope.transform.position).normalized;
+        var goalPos = (Vector2)lastRope.transform.position + (directionFromLastRope * RopePartDistance*2f);
+
+        ropeTransform.position = goalPos;
+
+        Rigidbody2D prevRigidBody = lastRope.transform.GetComponent<Rigidbody2D>();
+        Rigidbody2D newRigidBody = ropeTransform.GetComponent<Rigidbody2D>();
+
+        var newHinge = ropeTransform.GetComponent<HingeJoint2D>();
+
+        newHinge.connectedBody = prevRigidBody;
+
+        newHinge.anchor = new Vector2((prevRigidBody.transform.position - newRigidBody.transform.position).x, (prevRigidBody.transform.position - newRigidBody.transform.position).y);
+
+        newHinge.connectedAnchor = Vector2.zero;
+
+        newHinge.breakForce = 999999f;
+        newHinge.breakTorque = 999999f;
+
+        ropes.Add(ropeTransform);
+
+        //holderGrabber.Release();
+        //var grabbed = holderGrabber.TryGrab(ropeTransform.GetComponent<Collider2D>());
+
+
+        return false;
     }
 }

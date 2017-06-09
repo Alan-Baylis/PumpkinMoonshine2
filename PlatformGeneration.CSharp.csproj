@@ -93,6 +93,7 @@
     <Compile Include="Assets\FailedRopeSystem\RopeSystem.cs" />
     <Compile Include="Assets\Helpers.cs" />
     <Compile Include="Assets\RopeCreator.cs" />
+    <Compile Include="Assets\RopeDeployer.cs" />
     <Compile Include="Assets\RopeGrabber.cs" />
     <Compile Include="Assets\RopeSystem\RopeBehavior2.cs" />
     <Compile Include="Assets\Utility\PropagateMessages.cs" />

@@ -7,10 +7,12 @@ public class RopeGrabber : MonoBehaviour
 {
     [HideInInspector]
     private RopeBehavior2 AttachedRopePart;
+    public RopeBehavior2 MyAttachedRopePart { get { return AttachedRopePart; } }
     private System.Guid? AttachmentId;
     public Rigidbody2D physics;
     public HingeJoint2D fixedJoint;
     public float climbSpeed;
+    public RopeDeployer deployer;
 
     public bool hasGrabbed { get { return AttachedRopePart != null; } }
 
@@ -31,7 +33,12 @@ public class RopeGrabber : MonoBehaviour
 
         if(Input.GetAxis("Horizontal")!=0f || Input.GetAxis("Vertical") != 0f)
         {
-            TryClimb(new Vector2(-Input.GetAxis("Horizontal"), Input.GetAxis("Vertical")));
+            var isFlipped = transform.parent.localScale.x < 0f;
+            var horiz = Input.GetAxis("Horizontal");
+            var vert = Input.GetAxis("Vertical");
+            if (isFlipped)
+                horiz = -horiz;
+            TryClimb(new Vector2(horiz, vert));
         }
     }
 
@@ -68,7 +75,7 @@ public class RopeGrabber : MonoBehaviour
         Release();
     }
 
-    private void Release()
+    public void Release()
     {
         fixedJoint.enabled = false;
         AttachedRopePart = null;
@@ -77,7 +84,9 @@ public class RopeGrabber : MonoBehaviour
         physics.gravityScale = physics.gravityScale * 4f;
     }
 
-    private bool TryGrab(Collider2D collider)
+    
+
+    public bool TryGrab(Collider2D collider)
     {
         Debug.Log("Try Grab");
         if (Input.GetKey(KeyCode.Space))
@@ -154,6 +163,14 @@ public class RopeGrabber : MonoBehaviour
                     TryGrab(previousAttachedRopePart.GetComponent<Collider2D>());
                 }
             }
+            else
+            {
+                //last ditch effort, check if we have a deployer that is deploying...
+                if (deployer.isDeploying)
+                {
+                    deployer.StartDeploy(AttachedRopePart.transform);
+                }
+            }
         }
-   }
+    }
 }

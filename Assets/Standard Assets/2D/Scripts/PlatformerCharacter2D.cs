@@ -21,6 +21,7 @@ namespace UnityStandardAssets._2D
         private Rigidbody2D m_Rigidbody2D;
         private bool m_FacingRight = true;  // For determining which way the player is currently facing.
         public bool m_hanging = false;
+        public bool isGrounded { get { return m_Grounded; } }
         private void Awake()
         {
             // Setting up references.
@@ -68,7 +69,7 @@ namespace UnityStandardAssets._2D
             m_Anim.SetBool("Crouch", crouch);
 
             //only control the player if grounded or airControl is turned on
-            if ( (m_Grounded || m_AirControl) && !m_hanging)
+            if ( (m_Grounded || (m_AirControl)&& !m_hanging))
             {
                 // Reduce the speed if crouching by the crouchSpeed multiplier
                 move = (crouch ? move*m_CrouchSpeed : move);
