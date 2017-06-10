@@ -77,8 +77,25 @@ namespace UnityStandardAssets._2D
                 // The Speed animator parameter is set to the absolute value of the horizontal input.
                 m_Anim.SetFloat("Speed", Mathf.Abs(move));
 
-                // Move the character
-                m_Rigidbody2D.velocity = new Vector2(move*m_MaxSpeed, m_Rigidbody2D.velocity.y);
+                // Move the character if not maxspeed in that direction
+                if(move != 0f && m_Rigidbody2D.velocity.x * Mathf.Sign(move) < m_MaxSpeed)
+                {
+                    m_Rigidbody2D.AddForce( new Vector2(move *10f * m_MaxSpeed, 0f));
+                    if(m_Rigidbody2D.velocity.x > m_MaxSpeed)
+                    {
+                        var catchtis = "marfwr";
+                    }
+                }
+                else if(move != 0f)
+                {
+                    var catchthis = "woofer";
+                }
+                //slow the character down
+                if(move == 0)
+                {
+                    m_Rigidbody2D.AddForce(new Vector2(-m_Rigidbody2D.velocity.x, 0f));
+                }
+
 
                 // If the input is moving the player right and the player is facing left...
                 if (move > 0 && !m_FacingRight)
