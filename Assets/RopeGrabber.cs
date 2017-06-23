@@ -7,18 +7,26 @@ public class RopeGrabber : MonoBehaviour
 {
     [HideInInspector]
     private RopeBehavior2 AttachedRopePart;
+    private RopeBehavior2 PreviouslyAttachedRopePart;
     public RopeBehavior2 MyAttachedRopePart { get { return AttachedRopePart; } }
     private System.Guid? AttachmentId;
     public Rigidbody2D physics;
-    public HingeJoint2D fixedJoint;
+    public SpringJoint2D fixedJoint;
     public float climbSpeed;
     public RopeDeployer deployer;
 
     public bool hasGrabbed { get { return AttachedRopePart != null; } }
 
+    private List<Collider2D> grabbables;
+
+    private Vector2 currentDirection = Vector2.zero;
+
+    private bool shouldClimb = false;
+
     // Use this for initialization
     void Start()
     {
+        grabbables = new List<Collider2D>();
         AttachedRopePart = null;
         AttachmentId = null;
     }
@@ -30,46 +38,50 @@ public class RopeGrabber : MonoBehaviour
         {
             Release();
         }
-
-        if(Input.GetAxis("Horizontal")!=0f || Input.GetAxis("Vertical") != 0f)
+        
+        if(AttachedRopePart != null && (Input.GetAxis("Horizontal")!=0f || Input.GetAxis("Vertical") != 0f))
         {
             var isFlipped = transform.parent.localScale.x < 0f;
             var horiz = Input.GetAxis("Horizontal");
             var vert = Input.GetAxis("Vertical");
             if (isFlipped)
                 horiz = -horiz;
-            TryClimb(new Vector2(horiz, vert));
+            currentDirection = new Vector2(horiz, vert);
+            if (shouldClimb == false)
+            {
+                Debug.Log("Starting Climb at " + System.DateTime.Now.ToString());
+                StartCoroutine("ClimbSequence");
+                shouldClimb = true;
+            }    
+        }
+        else
+        {
+            shouldClimb = false;
+            StopCoroutine("ClimbSequence");
         }
     }
-
+    
 
     void OnTriggerEnter2D(Collider2D other)
     {
-        Debug.Log("trigger enter");
-        TryGrab(other);
-    }
-    void OnTriggerStay2D(Collider2D other)
-    {
-        Debug.Log("trigger stay");
-        TryGrab(other);
-    }
+        //Debug.Log("trigger enter");
+        if (other.GetComponent<RopeBehavior2>() == null)
+            return;
 
-    void OnTrigger2D(Collider2D other)
-    {
-        Debug.Log("trigger leave");
-        TryRelease(other);
+        grabbables.Add(other);
+        if(AttachedRopePart==null)
+            TryGrab(other);
     }
+    void OnTriggerExit2D(Collider2D other)
+    {
+        if(other.GetComponent<RopeBehavior2>()!=null)
+            grabbables = grabbables.Where(x => x.GetInstanceID() != other.GetInstanceID()).ToList();
+    }
+    
 
-    private void TryRelease(Collider2D collider)
+    private void TryRelease()
     {
         if (AttachedRopePart == null)
-            return;
-
-        var ropePart = collider.GetComponent<RopeBehavior>();
-        if (ropePart == null)
-            return;
-
-        if (ropePart != AttachedRopePart)
             return;
 
         Release();
@@ -78,35 +90,74 @@ public class RopeGrabber : MonoBehaviour
     public void Release()
     {
         fixedJoint.enabled = false;
+        PreviouslyAttachedRopePart = AttachedRopePart;
         AttachedRopePart = null;
         
         physics.GetComponent<PlatformerCharacter2D>().m_hanging = false;
         physics.gravityScale = physics.gravityScale * 4f;
     }
 
-    
+    public Collider2D getClosestCollider(bool ignoreAttached = false)
+    {
+        return getClosestCollider(Vector2.zero, ignoreAttached);
+    }
+    public Collider2D getClosestCollider(Vector2 relativePoint, bool ignoreAttached = true)
+    {
+        var point = (Vector2)transform.position + relativePoint;
+
+        var connectedRopeParts = grabbables.Where(x => 
+            RopePartsAreConnected(x.GetComponent<RopeBehavior2>(), AttachedRopePart.GetComponent<RopeBehavior2>()) 
+            || AttachedRopePart.transform.GetInstanceID() == x.transform.GetInstanceID()
+        );
+
+        if (ignoreAttached && AttachedRopePart != null)
+            return grabbables.Where(x => x.GetInstanceID() != AttachedRopePart.transform.GetComponent<Collider2D>().GetInstanceID())
+                .OrderBy(x => ((Vector2)x.transform.position - point).magnitude).FirstOrDefault();
+        else if (ignoreAttached && PreviouslyAttachedRopePart != null)
+            return grabbables.Where(x => x.GetInstanceID() != PreviouslyAttachedRopePart.transform.GetComponent<Collider2D>().GetInstanceID())
+                .OrderBy(x => ((Vector2)x.transform.position - point).magnitude).FirstOrDefault();
+        else
+            return grabbables
+               .OrderBy(x => ((Vector2)x.transform.position - point).magnitude).FirstOrDefault();
+    }
 
     public bool TryGrab(Collider2D collider)
     {
-        Debug.Log("Try Grab");
+        
         if (Input.GetKey(KeyCode.Space))
             return false;
 
         if (AttachedRopePart != null)
             return false;
 
-        RopeBehavior2 ropePart = collider.transform.GetComponent<RopeBehavior2>();
+        if (grabbables.Count() == 0)
+            return false;
+
+        Debug.Log("Try Grab");
+
+        
+        //get collider for grabbing//
+        Collider2D goalRopePart;
+        if (collider == null)
+        {
+            var nearestRopePart = getClosestCollider(true);
+            goalRopePart = nearestRopePart;
+        }
+        else
+            goalRopePart = collider;
+        if (collider == null)
+            return false;
+        RopeBehavior2 ropePart = goalRopePart.transform.GetComponent<RopeBehavior2>();//collider.transform.GetComponent<RopeBehavior2>();
         if (ropePart == null)
             return false;
 
+        Debug.Log("Should Grab");
+
         AttachedRopePart = ropePart;
-        
         fixedJoint.connectedBody = AttachedRopePart.GetComponent<Rigidbody2D>();
 
-        var connectedPosition = transform.localPosition;
-        Debug.Log(transform.localPosition);
-        Debug.Log(connectedPosition);
-        fixedJoint.anchor =connectedPosition;
+        var connectedPosition = (Vector2)fixedJoint.transform.InverseTransformPoint(transform.position);
+        fixedJoint.anchor = connectedPosition;
         fixedJoint.connectedAnchor = Vector2.zero;
 
         physics.GetComponent<PlatformerCharacter2D>().m_hanging = true;
@@ -122,55 +173,42 @@ public class RopeGrabber : MonoBehaviour
         if (AttachedRopePart == null)
             return;
 
-        var collider = transform.GetComponent<CircleCollider2D>();
-        if (collider == null)
-            return;
+        var relativePoint = direction.normalized * transform.GetComponent<CircleCollider2D>().radius;
 
-        var goalAnchor = fixedJoint.anchor - (direction.normalized * climbSpeed * Time.deltaTime);
+        Debug.Log("Relative point:" + relativePoint.ToString());
 
-        RaycastHit2D[] results = new RaycastHit2D[3];
-        collider.Cast(Vector2.one, results, 0.0f);
-        var resultList = new List<RaycastHit2D>(results);
-        var inRange = resultList.Where(x => x.transform!=null && x.transform.GetComponent<RopeBehavior2>() != null
-            && x.transform.GetComponent<RopeBehavior2>().GetInstanceID() == AttachedRopePart.GetInstanceID()).Count() > 0;
+        var closestCollider = getClosestCollider(relativePoint, true);
 
-        RaycastHit2D[] physicsResults = new RaycastHit2D[1];
-        var filter = (new ContactFilter2D()); filter.SetLayerMask(LayerMask.NameToLayer("Default")); 
-        physics.Cast(-goalAnchor, filter ,physicsResults, goalAnchor.magnitude);
-        var physicsResultsList = new List<RaycastHit2D>(physicsResults);
-        var collisionFree = !physicsResultsList.Any(x => x.transform != null);   
-        //only move if resulting position isn't out of reach
-        if (inRange && collisionFree)
+        TryRelease();
+        TryGrab(closestCollider);
+    }
+
+    IEnumerator ClimbSequence()
+    {
+        while (true)
         {
-            fixedJoint.anchor = goalAnchor;
+            TryClimb(currentDirection);
+            yield return new WaitForSeconds(.5f);
         }
-        else
-        {
-            //Try to find a a different rope is currently colliding.  if so, try to re attach to that rope.
-            RaycastHit2D[] newResults = new RaycastHit2D[2];
-            //resulting position is out of reach... try to find newer rope part
-            collider.Cast(Vector2.one, newResults, 0.0f);
+    }
 
-            var newResultList = new List<RaycastHit2D>(newResults);
-            var candidate = newResultList.Where(x => x.transform != null && x.transform.GetComponent<RopeBehavior2>() != null && x.transform.GetComponent<RopeBehavior2>().GetInstanceID() != AttachedRopePart.GetInstanceID()).FirstOrDefault();
-            if (candidate.transform != null && candidate.transform.GetComponent<Collider2D>() != null)
-            {
-                var previousAttachedRopePart = AttachedRopePart;
-                Release();
-                var grabbed = TryGrab(candidate.transform.GetComponent<Collider2D>());
-                if (!grabbed)
-                {
-                    TryGrab(previousAttachedRopePart.GetComponent<Collider2D>());
-                }
-            }
-            else
-            {
-                //last ditch effort, check if we have a deployer that is deploying...
-                if (deployer.isDeploying)
-                {
-                    deployer.StartDeploy(AttachedRopePart.transform);
-                }
-            }
-        }
+    private bool RopePartsAreConnected(RopeBehavior2 part1, RopeBehavior2 part2)
+    {
+        return RopePartConnectedToRopePart(part1, part2) || RopePartConnectedToRopePart(part2, part1);
+    }
+    private bool RopePartConnectedToRopePart(RopeBehavior2 part1, RopeBehavior2 part2)
+    {
+        var hingeJoint = part1.transform.GetComponent<HingeJoint2D>();
+        if (hingeJoint == null)
+            return false;
+
+        var rigid = part2.GetComponent<Rigidbody2D>();
+        if (rigid == null)
+            return false;
+
+        if (hingeJoint.connectedBody.GetInstanceID() == rigid.GetInstanceID())
+            return true;
+
+        return false;
     }
 }
