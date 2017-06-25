@@ -110,15 +110,30 @@ public class RopeGrabber : MonoBehaviour
             || AttachedRopePart.transform.GetInstanceID() == x.transform.GetInstanceID()
         );
 
+
+
+        Collider2D chosenCollider = null;
         if (ignoreAttached && AttachedRopePart != null)
-            return grabbables.Where(x => x.GetInstanceID() != AttachedRopePart.transform.GetComponent<Collider2D>().GetInstanceID())
-                .OrderBy(x => ((Vector2)x.transform.position - point).magnitude).FirstOrDefault();
-        else if (ignoreAttached && PreviouslyAttachedRopePart != null)
-            return grabbables.Where(x => x.GetInstanceID() != PreviouslyAttachedRopePart.transform.GetComponent<Collider2D>().GetInstanceID())
-                .OrderBy(x => ((Vector2)x.transform.position - point).magnitude).FirstOrDefault();
+            chosenCollider = connectedRopeParts
+                .Where(
+                  x => x.GetInstanceID() != AttachedRopePart.transform.GetComponent<Collider2D>().GetInstanceID()
+                  && Vector2.Dot(relativePoint.normalized, (Vector2)(x.transform.position - transform.position).normalized) > .5f
+                )
+                .OrderByDescending(x => (
+                  Vector2.Dot(relativePoint.normalized, (Vector2)(x.transform.position - transform.position).normalized)
+                )
+              ).FirstOrDefault();
+        /*else if (ignoreAttached && PreviouslyAttachedRopePart != null)
+            return connectedRopeParts.Where(x => x.GetInstanceID() != PreviouslyAttachedRopePart.transform.GetComponent<Collider2D>().GetInstanceID())
+                .OrderByDescending(x => (
+                  Vector2.Dot(relativePoint.normalized, (Vector2)(x.transform.position - transform.position).normalized)
+                )
+              ).FirstOrDefault();*/
         else
-            return grabbables
+            chosenCollider = connectedRopeParts
                .OrderBy(x => ((Vector2)x.transform.position - point).magnitude).FirstOrDefault();
+
+        return chosenCollider;
     }
 
     public bool TryGrab(Collider2D collider)
@@ -178,6 +193,10 @@ public class RopeGrabber : MonoBehaviour
         Debug.Log("Relative point:" + relativePoint.ToString());
 
         var closestCollider = getClosestCollider(relativePoint, true);
+
+        //test
+        if (closestCollider == null)
+            return;
 
         TryRelease();
         TryGrab(closestCollider);
