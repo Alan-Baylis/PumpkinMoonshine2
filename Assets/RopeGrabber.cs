@@ -14,8 +14,10 @@ public class RopeGrabber : MonoBehaviour
     public SpringJoint2D fixedJoint;
     public float climbSpeed;
     public RopeDeployer deployer;
+    public bool holdingEndOfRope { get { return AtEndOfRope(); } }
 
     public bool hasGrabbed { get { return AttachedRopePart != null; } }
+    public bool hasTaughtRope { get { return IsRopeTaught(); } }
 
     private List<Collider2D> grabbables;
 
@@ -38,15 +40,18 @@ public class RopeGrabber : MonoBehaviour
         {
             Release();
         }
-        
-        if(AttachedRopePart != null && (Input.GetAxis("Horizontal")!=0f || Input.GetAxis("Vertical") != 0f))
+
+        //climbing
+        if (AttachedRopePart != null && (Input.GetAxis("Horizontal") != 0f || Input.GetAxis("Vertical") != 0f)
+             && (!physics.GetComponent<PlatformerCharacter2D>().isGrounded || (physics.GetComponent<PlatformerCharacter2D>().isGrounded && Input.GetKey(KeyCode.X)))
+           )
         {
             var isFlipped = transform.parent.localScale.x < 0f;
             var horiz = Input.GetAxis("Horizontal");
             var vert = Input.GetAxis("Vertical");
-            if (isFlipped)
+            /*if (isFlipped)*/
                 horiz = -horiz;
-            currentDirection = new Vector2(horiz, vert);
+            currentDirection = new Vector2(-horiz, vert);
             if (shouldClimb == false)
             {
                 Debug.Log("Starting Climb at " + System.DateTime.Now.ToString());
@@ -59,8 +64,23 @@ public class RopeGrabber : MonoBehaviour
             shouldClimb = false;
             StopCoroutine("ClimbSequence");
         }
+
+        ////holding loosely
+        //if(AttachedRopePart != null && (Input.GetAxis("Horizontal") != 0f || Input.GetAxis("Vertical") != 0f)
+        //     && physics.GetComponent<PlatformerCharacter2D>().isGrounded)
+        //{
+        //    var wasGrabbing = AttachedRopePart;
+        //    TryRelease();
+        //   /* TryGrab(null);
+        //    if (AttachedRopePart == null)
+        //        TryGrab(wasGrabbing.GetComponent<Collider2D>());*/
+        //}
     }
     
+    private bool IsRopeTaught()
+    {
+        return AttachedRopePart != null && ((Vector2)(AttachedRopePart.transform.position - transform.position)).magnitude > .1f;
+    }
 
     void OnTriggerEnter2D(Collider2D other)
     {
@@ -105,11 +125,14 @@ public class RopeGrabber : MonoBehaviour
     {
         var point = (Vector2)transform.position + relativePoint;
 
-        var connectedRopeParts = grabbables.Where(x => 
-            RopePartsAreConnected(x.GetComponent<RopeBehavior2>(), AttachedRopePart.GetComponent<RopeBehavior2>()) 
-            || AttachedRopePart.transform.GetInstanceID() == x.transform.GetInstanceID()
-        );
-
+        IEnumerable<Collider2D> connectedRopeParts;
+        if (ignoreAttached && AttachedRopePart != null)
+            connectedRopeParts = grabbables.Where(x => x.GetComponent<RopeBehavior2>() != null && AttachedRopePart.GetComponent<RopeBehavior2>()!= null
+                && RopePartsAreConnected(x.GetComponent<RopeBehavior2>(), AttachedRopePart.GetComponent<RopeBehavior2>())
+                || AttachedRopePart.transform.GetInstanceID() == x.transform.GetInstanceID()
+            );
+        else
+            connectedRopeParts = grabbables;
 
 
         Collider2D chosenCollider = null;
@@ -123,17 +146,23 @@ public class RopeGrabber : MonoBehaviour
                   Vector2.Dot(relativePoint.normalized, (Vector2)(x.transform.position - transform.position).normalized)
                 )
               ).FirstOrDefault();
-        /*else if (ignoreAttached && PreviouslyAttachedRopePart != null)
-            return connectedRopeParts.Where(x => x.GetInstanceID() != PreviouslyAttachedRopePart.transform.GetComponent<Collider2D>().GetInstanceID())
-                .OrderByDescending(x => (
-                  Vector2.Dot(relativePoint.normalized, (Vector2)(x.transform.position - transform.position).normalized)
-                )
-              ).FirstOrDefault();*/
         else
             chosenCollider = connectedRopeParts
                .OrderBy(x => ((Vector2)x.transform.position - point).magnitude).FirstOrDefault();
 
         return chosenCollider;
+    }
+
+    public bool AtEndOfRope()
+    {
+        if (AttachedRopePart == null)
+            return false;
+
+        var connectedRopeParts = RopeBehavior2.All.Where(x => x.GetComponent<RopeBehavior2>() != null && AttachedRopePart.GetComponent<RopeBehavior2>() != null
+            && RopePartsAreConnected(x.GetComponent<RopeBehavior2>(), AttachedRopePart.GetComponent<RopeBehavior2>())
+        );
+
+        return connectedRopeParts.Count() <= 1; 
     }
 
     public bool TryGrab(Collider2D collider)
@@ -195,11 +224,16 @@ public class RopeGrabber : MonoBehaviour
         var closestCollider = getClosestCollider(relativePoint, true);
 
         //test
-        if (closestCollider == null)
-            return;
-
-        TryRelease();
-        TryGrab(closestCollider);
+        /*if (closestCollider == null && Input.GetKey(KeyCode.LeftShift) && AtEndOfRope())
+            //deploy more rope
+            deployer.StartDeploy(AttachedRopePart.transform);
+        else {*/
+        //climb
+        if (closestCollider != null) { 
+            TryRelease();
+            TryGrab(closestCollider);
+        }
+        //}
     }
 
     IEnumerator ClimbSequence()
@@ -211,6 +245,24 @@ public class RopeGrabber : MonoBehaviour
         }
     }
 
+    IEnumerator HoldLoosely()
+    {
+        var wasGrabbed = AttachedRopePart;
+        while (true)
+        {
+            if(AttachedRopePart == null)
+            {
+                TryGrab(null);
+                if (AttachedRopePart == null)
+                    TryGrab(wasGrabbed.transform.GetComponent<Collider2D>());
+            }
+            else
+            {
+                Release();
+            }
+            yield return new WaitForEndOfFrame();
+        }
+    }
     private bool RopePartsAreConnected(RopeBehavior2 part1, RopeBehavior2 part2)
     {
         return RopePartConnectedToRopePart(part1, part2) || RopePartConnectedToRopePart(part2, part1);

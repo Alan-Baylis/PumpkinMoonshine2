@@ -99,8 +99,7 @@ namespace UnityStandardAssets._2D
                     moveForce = m_MoveForceSecondary;
 
                 // Move the character if not maxspeed in that direction
-
-                if (move != 0f && m_Rigidbody2D.velocity.x * Mathf.Sign(move) < m_MaxSpeed)
+                if (move != 0f && m_Rigidbody2D.velocity.x * Mathf.Sign(move) < m_MaxSpeed && !Input.GetKey(KeyCode.X))
                 {
                     //Debug.Log("Adding Movement force.");
                     

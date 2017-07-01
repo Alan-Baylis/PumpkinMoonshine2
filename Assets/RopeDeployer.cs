@@ -6,7 +6,6 @@ using System.Linq;
 
 public class RopeDeployer : MonoBehaviour
 {
-
     public Transform RopePart;
     public float RopePartDistance;
    
@@ -26,6 +25,13 @@ public class RopeDeployer : MonoBehaviour
         }
     }
 
+    public void StartDeploy(Transform anchor, Vector2 goalPosition)
+    { 
+       addRopeTowardPosition(anchor, transform.position);   
+    }
+
+
+
     public void StartConnect ( Transform anchor)
     {
         if (lastRope == null)
@@ -42,11 +48,25 @@ public class RopeDeployer : MonoBehaviour
         HingeTwoTransforms(lastRope, hingerHinge, goalConnection);
     }
 
+
     void Update()
     {
         if (!Input.GetKey(KeyCode.LeftShift)||Input.GetKey(KeyCode.CapsLock))
             lastRope = null;
 
+        if (Input.GetKey(KeyCode.Z) && holderGrabber.holdingEndOfRope)
+        {
+            StartDeploy(holderGrabber.MyAttachedRopePart.transform, transform.position);
+            if (lastRope != null)
+            {
+                if (holderGrabber.hasGrabbed)
+                {
+                    holderGrabber.Release();
+
+                    holderGrabber.TryGrab(lastRope.transform.GetComponent<Collider2D>());
+                }
+            }
+        }
         /*if (lastRope != null)
         {
             var grabbed =
@@ -116,6 +136,26 @@ public class RopeDeployer : MonoBehaviour
         //holderGrabber.Release();
         //var grabbed = holderGrabber.TryGrab(ropeTransform.GetComponent<Collider2D>());
 
+
+        return false;
+    }
+
+    private bool addRopeTowardPosition(Transform anchor, Vector2 goalPosition)
+    {
+        var ropeTransform = Instantiate(RopePart) as Transform;
+
+        if (anchor != null)
+            lastRope = anchor;
+
+
+        var directionFromLastRope = (goalPosition - (Vector2)lastRope.transform.position).normalized;
+        var goalPos = (Vector2)lastRope.transform.position + (directionFromLastRope * RopePartDistance * 2f);
+
+        ropeTransform.position = goalPos;
+
+        HingeTwoTransforms(ropeTransform, ropeTransform.GetComponent<HingeJoint2D>(), lastRope);
+
+        lastRope = ropeTransform;
 
         return false;
     }
