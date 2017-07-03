@@ -92,11 +92,11 @@ namespace UnityStandardAssets._2D
                 m_Anim.SetFloat("Speed", Mathf.Abs(move));
 
                 var maxSpeed = m_MaxSpeed;
-                if (m_hanging)
-                    maxSpeed = m_MaxSpeedSecondary;
+                //if (m_hanging)
+                    //maxSpeed = m_MaxSpeedSecondary;
                 var moveForce = m_MoveForce;
-                if (m_hanging)
-                    moveForce = m_MoveForceSecondary;
+                //if (m_hanging)
+                    //moveForce = m_MoveForceSecondary;
 
                 // Move the character if not maxspeed in that direction
                 if (move != 0f && m_Rigidbody2D.velocity.x * Mathf.Sign(move) < m_MaxSpeed && !Input.GetKey(KeyCode.X))

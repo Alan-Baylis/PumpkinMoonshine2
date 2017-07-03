@@ -24,10 +24,11 @@ public class RopeGrabber : MonoBehaviour
     private Vector2 currentDirection = Vector2.zero;
 
     private bool shouldClimb = false;
-
+    private Vector2 GrabberBasePosition;
     // Use this for initialization
     void Start()
     {
+        GrabberBasePosition = (Vector2)(transform.position - physics.transform.position);
         grabbables = new List<Collider2D>();
         AttachedRopePart = null;
         AttachmentId = null;
@@ -57,14 +58,28 @@ public class RopeGrabber : MonoBehaviour
                 Debug.Log("Starting Climb at " + System.DateTime.Now.ToString());
                 StartCoroutine("ClimbSequence");
                 shouldClimb = true;
-            }    
+            }
+
+            if(!isFlipped)
+                moveGrabbingAnchor( (Vector2)(new Vector2(horiz, -vert).normalized * .3f) + GrabberBasePosition);    
+            else
+                moveGrabbingAnchor((Vector2)(new Vector2(-horiz, -vert).normalized * .3f) + GrabberBasePosition);    
+            
         }
         else
         {
+            moveGrabbingAnchor(Vector2.zero + GrabberBasePosition);
             shouldClimb = false;
             StopCoroutine("ClimbSequence");
         }
 
+
+        //grabbing
+        if (!hasGrabbed && grabbables.Count() != 0)
+        {
+            var closest = getClosestCollider(Vector2.zero, true);
+            TryGrab(closest);
+        }
         ////holding loosely
         //if(AttachedRopePart != null && (Input.GetAxis("Horizontal") != 0f || Input.GetAxis("Vertical") != 0f)
         //     && physics.GetComponent<PlatformerCharacter2D>().isGrounded)
@@ -82,6 +97,22 @@ public class RopeGrabber : MonoBehaviour
         return AttachedRopePart != null && ((Vector2)(AttachedRopePart.transform.position - transform.position)).magnitude > .1f;
     }
 
+
+    void FixedUpdate()
+    {
+        //StartCoroutine("LateFixedUpdate");
+    }
+    IEnumerator LateFixedUpdate()
+    {
+        yield return new WaitForFixedUpdate();
+
+        if(!hasGrabbed && grabbables.Count() != 0)
+        {
+            var closest = getClosestCollider(Vector2.zero, true);
+            TryGrab(closest);
+        }
+    }
+
     void OnTriggerEnter2D(Collider2D other)
     {
         //Debug.Log("trigger enter");
@@ -89,8 +120,6 @@ public class RopeGrabber : MonoBehaviour
             return;
 
         grabbables.Add(other);
-        if(AttachedRopePart==null)
-            TryGrab(other);
     }
     void OnTriggerExit2D(Collider2D other)
     {
@@ -114,7 +143,7 @@ public class RopeGrabber : MonoBehaviour
         AttachedRopePart = null;
         
         physics.GetComponent<PlatformerCharacter2D>().m_hanging = false;
-        physics.gravityScale = physics.gravityScale * 4f;
+        //physics.gravityScale = physics.gravityScale * 4f;
     }
 
     public Collider2D getClosestCollider(bool ignoreAttached = false)
@@ -205,7 +234,7 @@ public class RopeGrabber : MonoBehaviour
         fixedJoint.connectedAnchor = Vector2.zero;
 
         physics.GetComponent<PlatformerCharacter2D>().m_hanging = true;
-        physics.gravityScale = physics.gravityScale / 4f;
+        //physics.gravityScale = physics.gravityScale / 4f;
 
         fixedJoint.enabled = true;
 
@@ -281,5 +310,30 @@ public class RopeGrabber : MonoBehaviour
             return true;
 
         return false;
+    }
+
+    private void moveGrabbingAnchor(Vector2 positionRelativeToPhysics)
+    {
+        if (positionRelativeToPhysics != Vector2.zero)
+        {
+            var whatever = "shamy";
+        }
+        var speedCoeffecient = .025f;
+        
+        var currentPos = physics.GetComponent<SpringJoint2D>().anchor;
+        var newPos = currentPos + ((Vector2)positionRelativeToPhysics-currentPos) * speedCoeffecient;
+
+        var worldNewPoint = (Vector2)physics.transform.TransformPoint(newPos);
+        var ropePosition = worldNewPoint;
+        if (AttachedRopePart != null)
+            ropePosition = (Vector2)AttachedRopePart.transform.position;
+
+        //don't move if attached rope part is outside center of grabber
+        /*if (positionRelativeToPhysics != Vector2.zero && AttachedRopePart != null && 
+            (worldNewPoint - ropePosition).magnitude > transform.GetComponent<CircleCollider2D>().radius * .9f)
+            return;*/
+
+        physics.GetComponent<SpringJoint2D>().anchor = newPos;
+        transform.localPosition = currentPos;
     }
 }

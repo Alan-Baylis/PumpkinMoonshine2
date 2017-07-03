@@ -50,7 +50,7 @@ public class AnchorDeployer : MonoBehaviour {
         else
             difference = relativeInputDegree;
 
-        var goalAngle = deploymentAngle + (difference / 6f);
+        var goalAngle = deploymentAngle + (difference * .05f);
 
         deploymentDirection = Quaternion.Euler(0f, 0f, goalAngle) * Vector2.right;
     }
@@ -89,8 +89,8 @@ public class AnchorDeployer : MonoBehaviour {
 
         anchor.transform.GetComponent<RopeCreator>().holderGrabber = Grabber;
 
-        if (Deployer.isDeploying)
-            Deployer.StartConnect(anchor);
+        if (Grabber.hasGrabbed)
+            Deployer.StartConnect(anchor, Grabber.MyAttachedRopePart.transform);
         else
             Deployer.StartDeploy(anchor);
 

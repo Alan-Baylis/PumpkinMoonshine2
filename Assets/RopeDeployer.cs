@@ -15,14 +15,18 @@ public class RopeDeployer : MonoBehaviour
     
     public void StartDeploy(Transform anchor)
     {
+        var initiallyHolding = holderGrabber.hasGrabbed;
         var grabbed = false;
+        var minimumDistance = RopePart.GetComponent<CircleCollider2D>().radius;
         while (!grabbed)
         {
             addRopeTowardsHolder(anchor);
-            grabbed = //holderGrabber.MyAttachedRopePart!=null && lastRope.GetComponent<RopeBehavior2>().GetInstanceID() == holderGrabber.MyAttachedRopePart.GetInstanceID();
-                ((Vector2)(lastRope.position - holderGrabber.transform.position)).magnitude < holderGrabber.GetComponent<CircleCollider2D>().radius + lastRope.GetComponent<CircleCollider2D>().radius;
+            var remainingDistance = ((Vector2)(lastRope.position - holderGrabber.transform.position)).magnitude;
+            grabbed = remainingDistance < minimumDistance;
+            //((Vector2)(lastRope.position - holderGrabber.transform.position)).magnitude < holderGrabber.GetComponent<CircleCollider2D>().radius + lastRope.GetComponent<CircleCollider2D>().radius;
             anchor = null;
         }
+        
     }
 
     public void StartDeploy(Transform anchor, Vector2 goalPosition)
@@ -32,20 +36,33 @@ public class RopeDeployer : MonoBehaviour
 
 
 
-    public void StartConnect ( Transform anchor)
+    public void StartConnect ( Transform anchor, Transform connectTo)
     {
         if (lastRope == null)
-            return;
-        Transform goalConnection = lastRope;
+            lastRope = anchor;
         var connected = false;
+
+        var minimumDistance = lastRope.GetComponent<CircleCollider2D>().radius;
+
+        var count = 0;
         while (!connected)
         {
-            addRopeTowardsHolder(anchor);
-            connected = ((Vector2)(lastRope.position - goalConnection.position)).magnitude <= lastRope.GetComponent<CircleCollider2D>().radius + goalConnection.GetComponent<CircleCollider2D>().radius;
+            count += 1;
+            if(count % 20 == 0)
+            {
+                var whatevs = "break here";
+                if (count > 100)
+                    break;
+            }
+
+            addRopeTowardPosition(anchor, connectTo.position);
+            var remainingDistance = ((Vector2)(lastRope.position - connectTo.position)).magnitude;
+            connected = remainingDistance < minimumDistance;
+                //((Vector2)(lastRope.position - goalConnection.position)).magnitude <= lastRope.GetComponent<CircleCollider2D>().radius + goalConnection.GetComponent<CircleCollider2D>().radius;
             anchor = null;
         }
         var hingerHinge = lastRope.gameObject.AddComponent<HingeJoint2D>();
-        HingeTwoTransforms(lastRope, hingerHinge, goalConnection);
+        HingeTwoTransforms(lastRope, hingerHinge, connectTo);
     }
 
 
@@ -56,16 +73,7 @@ public class RopeDeployer : MonoBehaviour
 
         if (Input.GetKey(KeyCode.Z) && holderGrabber.holdingEndOfRope)
         {
-            StartDeploy(holderGrabber.MyAttachedRopePart.transform, transform.position);
-            if (lastRope != null)
-            {
-                if (holderGrabber.hasGrabbed)
-                {
-                    holderGrabber.Release();
-
-                    holderGrabber.TryGrab(lastRope.transform.GetComponent<Collider2D>());
-                }
-            }
+            TryDeployOneRope();
         }
         /*if (lastRope != null)
         {
@@ -79,6 +87,20 @@ public class RopeDeployer : MonoBehaviour
             }
         }*/
 
+    }
+
+    public void TryDeployOneRope()
+    {
+        StartDeploy(holderGrabber.MyAttachedRopePart.transform, transform.position);
+        if (lastRope != null)
+        {
+            if (holderGrabber.hasGrabbed)
+            {
+                holderGrabber.Release();
+
+                holderGrabber.TryGrab(lastRope.transform.GetComponent<Collider2D>());
+            }
+        }
     }
 
     public void HingeTwoTransforms(Transform hinger, HingeJoint2D hingerHinge, Transform hinged)
