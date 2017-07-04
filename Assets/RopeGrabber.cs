@@ -11,9 +11,13 @@ public class RopeGrabber : MonoBehaviour
     public RopeBehavior2 MyAttachedRopePart { get { return AttachedRopePart; } }
     private System.Guid? AttachmentId;
     public Rigidbody2D physics;
-    public SpringJoint2D fixedJoint;
+    public SpringJoint2D springJoint;
+    public HingeJoint2D hingeJoint;
     public float climbSpeed;
     public RopeDeployer deployer;
+    public float springFrequencyMax=14.5f;
+    public float springFrequencyMin=7f;
+    public float springFrequencyTime;
     public bool holdingEndOfRope { get { return AtEndOfRope(); } }
 
     public bool hasGrabbed { get { return AttachedRopePart != null; } }
@@ -22,7 +26,8 @@ public class RopeGrabber : MonoBehaviour
     private List<Collider2D> grabbables;
 
     private Vector2 currentDirection = Vector2.zero;
-
+    private enum AttachmentMode { Spring , Hinge};
+    private AttachmentMode AttachmentState = AttachmentMode.Spring;
     private bool shouldClimb = false;
     private Vector2 GrabberBasePosition;
     // Use this for initialization
@@ -47,6 +52,8 @@ public class RopeGrabber : MonoBehaviour
              && (!physics.GetComponent<PlatformerCharacter2D>().isGrounded || (physics.GetComponent<PlatformerCharacter2D>().isGrounded && Input.GetKey(KeyCode.X)))
            )
         {
+            TrySwitchJointMode(AttachmentMode.Spring);
+
             var isFlipped = transform.parent.localScale.x < 0f;
             var horiz = Input.GetAxis("Horizontal");
             var vert = Input.GetAxis("Vertical");
@@ -61,9 +68,9 @@ public class RopeGrabber : MonoBehaviour
             }
 
             if(!isFlipped)
-                moveGrabbingAnchor( (Vector2)(new Vector2(horiz, -vert).normalized * .3f) + GrabberBasePosition);    
+                moveGrabbingAnchor( (Vector2)(new Vector2(horiz*.5f, -vert).normalized * .3f) + GrabberBasePosition);    
             else
-                moveGrabbingAnchor((Vector2)(new Vector2(-horiz, -vert).normalized * .3f) + GrabberBasePosition);    
+                moveGrabbingAnchor((Vector2)(new Vector2(-horiz*.5f, -vert).normalized * .3f) + GrabberBasePosition);    
             
         }
         else
@@ -73,12 +80,36 @@ public class RopeGrabber : MonoBehaviour
             StopCoroutine("ClimbSequence");
         }
 
-
         //grabbing
         if (!hasGrabbed && grabbables.Count() != 0)
         {
             var closest = getClosestCollider(Vector2.zero, true);
+            TrySwitchJointMode(AttachmentMode.Spring);
             TryGrab(closest);
+        }
+
+        //pull up gradually
+        if (hasGrabbed && springJoint.frequency < springFrequencyMax)
+        {
+            if (springJoint.frequency == Mathf.Infinity)
+                 springJoint.frequency = springFrequencyMax;
+            var change = (springFrequencyMax - springFrequencyMin) / springFrequencyTime;
+            
+            var initial = springJoint.frequency;
+            var dist = ((Vector2)(AttachedRopePart.transform.position - transform.position)).magnitude;
+            var measuringDist = .5f;
+            if (dist > measuringDist)
+                springJoint.frequency = springFrequencyMin;
+            else
+            {
+                var proposedFrequency = springFrequencyMin + (Mathf.Pow((1f - (dist / measuringDist)),2f) * (springFrequencyMax - springFrequencyMin));
+                if (proposedFrequency > springJoint.frequency)
+                    springJoint.frequency = proposedFrequency;
+                else
+                {
+                    springJoint.frequency += change * Time.deltaTime;
+                }
+            }
         }
         ////holding loosely
         //if(AttachedRopePart != null && (Input.GetAxis("Horizontal") != 0f || Input.GetAxis("Vertical") != 0f)
@@ -90,6 +121,11 @@ public class RopeGrabber : MonoBehaviour
         //    if (AttachedRopePart == null)
         //        TryGrab(wasGrabbing.GetComponent<Collider2D>());*/
         //}
+
+        if(shouldClimb == false)
+        {
+            TrySwitchJointMode(AttachmentMode.Hinge);
+        }
     }
     
     private bool IsRopeTaught()
@@ -138,7 +174,10 @@ public class RopeGrabber : MonoBehaviour
 
     public void Release()
     {
-        fixedJoint.enabled = false;
+        springJoint.frequency = springFrequencyMin;
+        springJoint.enabled = false;
+        hingeJoint.enabled = false;
+        AttachmentState = AttachmentMode.Spring;
         PreviouslyAttachedRopePart = AttachedRopePart;
         AttachedRopePart = null;
         
@@ -226,19 +265,74 @@ public class RopeGrabber : MonoBehaviour
 
         Debug.Log("Should Grab");
 
+        springJoint.frequency = springFrequencyMin;
         AttachedRopePart = ropePart;
-        fixedJoint.connectedBody = AttachedRopePart.GetComponent<Rigidbody2D>();
+        springJoint.connectedBody = AttachedRopePart.GetComponent<Rigidbody2D>();
 
-        var connectedPosition = (Vector2)fixedJoint.transform.InverseTransformPoint(transform.position);
-        fixedJoint.anchor = connectedPosition;
-        fixedJoint.connectedAnchor = Vector2.zero;
+        var connectedPosition = (Vector2)springJoint.transform.InverseTransformPoint(transform.position);
+        springJoint.anchor = connectedPosition;
+        springJoint.connectedAnchor = Vector2.zero;
 
         physics.GetComponent<PlatformerCharacter2D>().m_hanging = true;
         //physics.gravityScale = physics.gravityScale / 4f;
 
-        fixedJoint.enabled = true;
+        springJoint.enabled = true;
 
         return true;
+    }
+
+    private void TrySwitchJointMode(AttachmentMode mode)
+    {
+        if (AttachedRopePart == null)
+            return;
+
+        if (mode == AttachmentMode.Hinge && !springJoint.enabled)
+            return;
+        if (mode == AttachmentMode.Spring && !hingeJoint.enabled)
+            return;
+
+        if (mode == AttachmentMode.Hinge && AttachmentState == AttachmentMode.Hinge)
+            return;
+        if (mode == AttachmentMode.Spring && AttachmentState == AttachmentMode.Spring)
+            return;
+
+        if (mode == AttachmentMode.Hinge && (
+            (
+              ((Vector2)(AttachedRopePart.transform.position - transform.position)).magnitude > .1f)
+              /*||
+              (GrabberBasePosition - (Vector2)transform.localPosition).magnitude > .01f*/
+            )
+        )
+            return;
+
+        if (mode == AttachmentMode.Hinge)
+        {
+            hingeJoint.connectedBody = AttachedRopePart.GetComponent<Rigidbody2D>();
+
+            var connectedPosition = (Vector2)hingeJoint.transform.InverseTransformPoint(transform.position);
+            hingeJoint.anchor = connectedPosition;
+            hingeJoint.connectedAnchor = Vector2.zero;
+
+            physics.GetComponent<PlatformerCharacter2D>().m_hanging = true;
+            hingeJoint.enabled = true;
+            springJoint.enabled = false;
+
+            AttachmentState = AttachmentMode.Hinge;
+        }
+        else
+        {
+            springJoint.connectedBody = AttachedRopePart.GetComponent<Rigidbody2D>();
+
+            var connectedPosition = (Vector2)springJoint.transform.InverseTransformPoint(transform.position);
+            springJoint.anchor = connectedPosition;
+            springJoint.connectedAnchor = Vector2.zero;
+
+            physics.GetComponent<PlatformerCharacter2D>().m_hanging = true;
+            springJoint.enabled = true;
+            hingeJoint.enabled = false;
+
+            AttachmentState = AttachmentMode.Spring;
+        }
     }
 
     private void TryClimb(Vector2 direction)
@@ -269,6 +363,8 @@ public class RopeGrabber : MonoBehaviour
     {
         while (true)
         {
+            if (currentDirection.normalized.y < -.25f)
+                yield return new WaitForSeconds(.5f);
             TryClimb(currentDirection);
             yield return new WaitForSeconds(.5f);
         }
@@ -318,7 +414,7 @@ public class RopeGrabber : MonoBehaviour
         {
             var whatever = "shamy";
         }
-        var speedCoeffecient = .025f;
+        var speedCoeffecient = .01f;
         
         var currentPos = physics.GetComponent<SpringJoint2D>().anchor;
         var newPos = currentPos + ((Vector2)positionRelativeToPhysics-currentPos) * speedCoeffecient;
@@ -334,6 +430,7 @@ public class RopeGrabber : MonoBehaviour
             return;*/
 
         physics.GetComponent<SpringJoint2D>().anchor = newPos;
+        hingeJoint.anchor = newPos;
         transform.localPosition = currentPos;
     }
 }
